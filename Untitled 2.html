@@ -1,0 +1,334 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title></title>
+  <meta name="Generator" content="Cocoa HTML Writer">
+  <meta name="CocoaVersion" content="2685.2">
+  <style type="text/css">
+    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
+    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; min-height: 14.0px}
+  </style>
+</head>
+<body>
+<p class="p1">You are a senior iOS engineer, solution architect, and code generator.</p>
+<p class="p2"><br></p>
+<p class="p1">You are helping me build an iOS app for a smart food scale project that combines:</p>
+<p class="p1">- a hardware scale with load cell + HX711 + STM32H7 + ESP32</p>
+<p class="p1">- BLE communication between the ESP32 and the iOS app</p>
+<p class="p1">- a backend that talks to Gemini (vision LLM) to compute nutrition from an image + weight.</p>
+<p class="p2"><br></p>
+<p class="p1">Your job is to:</p>
+<p class="p1">1. Design the architecture of the iOS app.</p>
+<p class="p1">2. Generate production-quality Swift / SwiftUI code.</p>
+<p class="p1">3. Show how the app communicates over BLE and HTTP.</p>
+<p class="p1">4. Make it realistic enough that I can open Xcode, paste your code, fix minor details, and run.</p>
+<p class="p2"><br></p>
+<p class="p1">Do NOT hand-wave. Do NOT write pseudo-code. Always provide full, compilable Swift files with proper imports and types.</p>
+<p class="p2"><br></p>
+<p class="p2"><br></p>
+<p class="p1">========================</p>
+<p class="p1">HIGH-LEVEL SYSTEM CONTEXT</p>
+<p class="p1">========================</p>
+<p class="p2"><br></p>
+<p class="p1">Hardware:</p>
+<p class="p1">- Smart food scale uses:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Load cell + HX711 for weight.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- STM32H7 as main MCU (for future DCMI camera + TFT screen).</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- ESP32 is used as communication module (BLE and possibly Wi-Fi later).</p>
+<p class="p1">- For this FIRST VERSION of the app:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- The iOS phone camera is used for capturing food images.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- ESP32 exposes a BLE service that sends the current weight in grams to the phone.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- The iOS app reads that weight, captures a food image from the phone camera, and sends both to the backend.</p>
+<p class="p2"><br></p>
+<p class="p1">BLE Protocol (for this MVP):</p>
+<p class="p1">- ESP32 exposes a BLE service with (example UUIDs, you can use these in the code):</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Service UUID: <span class="Apple-converted-space">      </span>"0000FFF0-0000-1000-8000-00805F9B34FB"</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Weight characteristic UUID: "0000FFF1-0000-1000-8000-00805F9B34FB"</p>
+<p class="p1">- The weight characteristic:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Notifies frequently (e.g., every 200 ms) with current weight in grams.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Value format is a 4-byte little-endian signed Int32 representing grams (e.g., 185 = 185 grams).</p>
+<p class="p1">- ESP32 may later have a “command” characteristic for tare/calibration, but for now:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- You may define a second characteristic (e.g. "0000FFF2-0000-1000-8000-00805F9B34FB") if you want to show how to send commands.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- But the critical one is the weight notify characteristic.</p>
+<p class="p2"><br></p>
+<p class="p1">Backend:</p>
+<p class="p1">- There is a backend server (you can assume a base URL constant, e.g.:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- BASE_URL = "https://api.foodsense.example.com"</p>
+<p class="p1">- The main endpoint for now is:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- POST /api/analyze_meal</p>
+<p class="p1">- The app sends:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- multipart/form-data with:</p>
+<p class="p1"><span class="Apple-converted-space">    </span>- "weight_grams": integer (total grams from scale at the moment of capture)</p>
+<p class="p1"><span class="Apple-converted-space">    </span>- "image": JPEG binary of the food photo captured by the phone camera</p>
+<p class="p1"><span class="Apple-converted-space">    </span>- (Optionally) "meal_type", "user_notes" as simple text fields.</p>
+<p class="p1">- The backend calls Gemini with a long system prompt and returns a JSON response with nutritional info.</p>
+<p class="p2"><br></p>
+<p class="p1">Example response JSON (simplified):</p>
+<p class="p1">{</p>
+<p class="p1"><span class="Apple-converted-space">  </span>"metadata": {</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"total_input_weight_grams": 185,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"meal_type": "lunch",</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"region_or_cuisine": "India / North Indian",</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"user_description": "home-cooked paneer curry with rice",</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"estimated_confidence_overall": "medium"</p>
+<p class="p1"><span class="Apple-converted-space">  </span>},</p>
+<p class="p1"><span class="Apple-converted-space">  </span>"detected_items": [</p>
+<p class="p1"><span class="Apple-converted-space">    </span>{</p>
+<p class="p1"><span class="Apple-converted-space">      </span>"id": "item_1",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>"label": "paneer curry",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>"category": "protein",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>"confidence": "medium",</p>
+<p class="p1"><span class="Apple-converted-space">      </span>"estimated_weight_grams": 100,</p>
+<p class="p1"><span class="Apple-converted-space">      </span>"nutrition": {</p>
+<p class="p1"><span class="Apple-converted-space">        </span>"calories_kcal": 320.0,</p>
+<p class="p1"><span class="Apple-converted-space">        </span>"protein_g": 18.0,</p>
+<p class="p1"><span class="Apple-converted-space">        </span>"carbs_g": 12.0,</p>
+<p class="p1"><span class="Apple-converted-space">        </span>"fat_g": 20.0,</p>
+<p class="p1"><span class="Apple-converted-space">        </span>"fiber_g": 2.0,</p>
+<p class="p1"><span class="Apple-converted-space">        </span>"micronutrients": []</p>
+<p class="p1"><span class="Apple-converted-space">      </span>},</p>
+<p class="p1"><span class="Apple-converted-space">      </span>"assumptions": [</p>
+<p class="p1"><span class="Apple-converted-space">        </span>"Assuming cooked with 1 tbsp vegetable oil."</p>
+<p class="p1"><span class="Apple-converted-space">      </span>]</p>
+<p class="p1"><span class="Apple-converted-space">    </span>}</p>
+<p class="p1"><span class="Apple-converted-space">  </span>],</p>
+<p class="p1"><span class="Apple-converted-space">  </span>"totals": {</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"total_estimated_weight_grams": 185,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"calories_kcal": 520.0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"protein_g": 22.0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"carbs_g": 60.0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"fat_g": 18.0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"fiber_g": 4.0,</p>
+<p class="p1"><span class="Apple-converted-space">    </span>"micronutrients": []</p>
+<p class="p1"><span class="Apple-converted-space">  </span>},</p>
+<p class="p1"><span class="Apple-converted-space">  </span>"warnings": []</p>
+<p class="p1">}</p>
+<p class="p2"><br></p>
+<p class="p1">You can define Codable structs matching this structure.</p>
+<p class="p2"><br></p>
+<p class="p1">The iOS app should:</p>
+<p class="p1">- Call this endpoint after capturing the image and reading the current weight.</p>
+<p class="p1">- Display the returned nutrition information in a user-friendly way.</p>
+<p class="p1">- Optionally store a local (or remote) log of meals.</p>
+<p class="p2"><br></p>
+<p class="p2"><br></p>
+<p class="p1">========================</p>
+<p class="p1">IOS APP REQUIREMENTS</p>
+<p class="p1">========================</p>
+<p class="p2"><br></p>
+<p class="p1">Platform &amp; stack:</p>
+<p class="p1">- iOS 17+ (you can assume latest iOS).</p>
+<p class="p1">- Language: Swift.</p>
+<p class="p1">- UI framework: SwiftUI (NOT UIKit for the main app).</p>
+<p class="p1">- BLE: CoreBluetooth.</p>
+<p class="p1">- Networking: URLSession with async/await.</p>
+<p class="p1">- Architecture: simple MVVM-style with ObservableObject view models.</p>
+<p class="p2"><br></p>
+<p class="p1">App permissions:</p>
+<p class="p1">- Must request Bluetooth LE access (NSBluetoothAlwaysUsageDescription in Info.plist).</p>
+<p class="p1">- Must request camera access (NSCameraUsageDescription).</p>
+<p class="p1">- If saving photos to library, use NSPhotoLibraryAddUsageDescription as well.</p>
+<p class="p2"><br></p>
+<p class="p1">Core features for this MVP:</p>
+<p class="p1">1. BLE integration:</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Scan for the ESP32-based scale with the defined service UUID.</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Automatically connect to the first matching device.</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Subscribe to weight notifications via the weight characteristic.</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Expose connection status and current weight as @Published properties in a BLEManager class.</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Handle disconnects by attempting to reconnect or rescan.</p>
+<p class="p2"><br></p>
+<p class="p1">2. Live weight display:</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- On the main screen, show:</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Connection status: “Searching… / Connecting… / Connected”</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Current weight in grams, updating in real time:</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- Example: “185 g”.</p>
+<p class="p2"><br></p>
+<p class="p1">3. Food capture &amp; logging flow:</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- The main screen has a button: “Capture Food”.</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- When tapped:</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Present the camera UI.</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Let the user take a photo of the current plate on the scale.</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- After capture:</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- Use the latest weight from BLEManager as the “weight_grams” for this meal.</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- Optionally let the user enter:</p>
+<p class="p1"><span class="Apple-converted-space">         </span>- meal_type (Picker: breakfast, lunch, dinner, snack)</p>
+<p class="p1"><span class="Apple-converted-space">         </span>- optional notes (TextField/TextEditor)</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- After confirming:</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Call the backend /api/analyze_meal endpoint.</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Show a loading indicator while waiting.</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Parse the JSON response into model types (e.g., MealNutrition, DetectedItem, etc.).</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Display a result screen with:</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- Food description / labels.</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- Calories.</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- Protein / carbs / fat / fiber.</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- Optionally a simple breakdown per item.</p>
+<p class="p2"><br></p>
+<p class="p1">4. Meal log:</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Maintain a simple list of previous logged meals (at least in-memory for now, or using local persistence like UserDefaults or a simple file).</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Each entry shows:</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Timestamp.</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Total weight.</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Calories.</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Main description (e.g., first detected item label).</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Provide a basic “Today” / history screen.</p>
+<p class="p2"><br></p>
+<p class="p1">5. Error handling &amp; UX:</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- If BLE is off / permission denied, show a clear message and steps.</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- If no scale is found, show “Searching…” with a message.</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- If network call fails, show a retry button on the result screen.</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- If backend returns invalid JSON, gracefully handle parse errors.</p>
+<p class="p2"><br></p>
+<p class="p1">6. Clean, modular structure:</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Separate code into logical files:</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- BLEManager.swift</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Models/NutritionModels.swift (Codable structs for backend response)</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Networking/APIClient.swift</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- Views:</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- ContentView.swift (root)</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- MainScaleView.swift (live weight + capture button)</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- CaptureMealView / ResultView / MealLogView, etc.</p>
+<p class="p1"><span class="Apple-converted-space">     </span>- ViewModels:</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- MealViewModel.swift (handles capture + analyze logic)</p>
+<p class="p1"><span class="Apple-converted-space">       </span>- MealLogViewModel.swift, if needed.</p>
+<p class="p2"><br></p>
+<p class="p1">7. Camera integration:</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Use a SwiftUI-compatible wrapper around UIImagePickerController OR PHPicker / AVFoundation.</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Provide full code for a reusable ImagePicker struct that works with SwiftUI.</p>
+<p class="p1"><span class="Apple-converted-space">   </span>- Ensure correct handling of dismiss and delivering the captured UIImage back to the SwiftUI view.</p>
+<p class="p2"><br></p>
+<p class="p2"><br></p>
+<p class="p1">========================</p>
+<p class="p1">CODING STYLE &amp; EXPECTATIONS</p>
+<p class="p1">========================</p>
+<p class="p2"><br></p>
+<p class="p1">When generating the code:</p>
+<p class="p2"><br></p>
+<p class="p1">- Use clear naming and full implementations.</p>
+<p class="p1">- Do NOT leave TODOs like “implement here”.</p>
+<p class="p1">- Do NOT use ellipses “…” to omit required code.</p>
+<p class="p1">- When you reference a type (e.g. NutritionResult, BLEManager), provide its full definition in some file.</p>
+<p class="p1">- Assume this is a brand-new Xcode project; everything needed for core functionality should be in your answer.</p>
+<p class="p2"><br></p>
+<p class="p1">For BLEManager:</p>
+<p class="p1">- Make BLEManager conform to:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- NSObject, ObservableObject</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- CBCentralManagerDelegate, CBPeripheralDelegate</p>
+<p class="p1">- Expose properties:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- @Published var isBluetoothOn: Bool</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- @Published var isConnected: Bool</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- @Published var currentWeightGrams: Int</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- @Published var statusMessage: String (e.g., “Scanning…”, “Connecting…”, etc.)</p>
+<p class="p1">- Implement:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- centralManagerDidUpdateState</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- didDiscover peripheral</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- didConnect</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- didDisconnectPeripheral</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- didDiscoverServices</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- didDiscoverCharacteristicsFor</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- didUpdateValueFor</p>
+<p class="p1">- Parse the Int32 little-endian weight from the characteristic.</p>
+<p class="p2"><br></p>
+<p class="p1">For APIClient:</p>
+<p class="p1">- Use a class or struct with async methods:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- func analyzeMeal(image: UIImage, weightGrams: Int, mealType: String?, userNotes: String?) async throws -&gt; NutritionResult</p>
+<p class="p1">- Construct a multipart/form-data request properly, including boundary, headers, body.</p>
+<p class="p1">- Parse JSON into Codable models.</p>
+<p class="p1">- Handle status code checks and error throwing.</p>
+<p class="p2"><br></p>
+<p class="p1">For models:</p>
+<p class="p1">- Define Codable structs that align with the backend JSON:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Metadata</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- DetectedItem</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- NutritionInfo</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Totals</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- NutritionResult (top-level).</p>
+<p class="p2"><br></p>
+<p class="p1">For SwiftUI views:</p>
+<p class="p1">- Root ContentView should:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Hold an @StateObject BLEManager.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Provide NavigationStack with:</p>
+<p class="p1"><span class="Apple-converted-space">    </span>- a main screen that shows:</p>
+<p class="p1"><span class="Apple-converted-space">      </span>- Connection status.</p>
+<p class="p1"><span class="Apple-converted-space">      </span>- Live weight.</p>
+<p class="p1"><span class="Apple-converted-space">      </span>- Button to go to “Log Meal”.</p>
+<p class="p1">- “Log Meal” screen:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Shows the live weight.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Button to open camera.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Preview of captured image.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Pickers / text inputs for meal_type and notes.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Button “Analyze &amp; Save”.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- While analyzing: show a ProgressView.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- On success: navigate to Results view.</p>
+<p class="p2"><br></p>
+<p class="p1">- Results view:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Shows top-level calories, macros, weight.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Show list of detected_items with label and per-item macros.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Button “Done” that returns to home.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Option: Button “View Log”.</p>
+<p class="p2"><br></p>
+<p class="p1">- Meal log view:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Lists stored MealEntry objects (local struct) with date, description, calories.</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- Data can be stored in-memory for this prompt, but show how to persist using UserDefaults or JSON file if possible.</p>
+<p class="p2"><br></p>
+<p class="p1">Info.plist settings:</p>
+<p class="p1">- Provide the keys and example values to add:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- NSBluetoothAlwaysUsageDescription</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- NSCameraUsageDescription</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- (optional) NSPhotoLibraryAddUsageDescription</p>
+<p class="p2"><br></p>
+<p class="p1">Also:</p>
+<p class="p1">- Mention the minimum iOS deployment target you assume (e.g. iOS 17).</p>
+<p class="p1">- Ensure all imports at top of files are correct:</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- import SwiftUI</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- import CoreBluetooth</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- import UIKit (for UIImage &amp; ImagePicker integration)</p>
+<p class="p1"><span class="Apple-converted-space">  </span>- etc.</p>
+<p class="p2"><br></p>
+<p class="p1">You may assume:</p>
+<p class="p1">- BASE_URL is defined as a constant in APIClient.</p>
+<p class="p1">- BLE service and characteristic UUIDs can be hardcoded as strings.</p>
+<p class="p2"><br></p>
+<p class="p1">========================</p>
+<p class="p1">OUTPUT FORMAT</p>
+<p class="p1">========================</p>
+<p class="p2"><br></p>
+<p class="p1">When you answer:</p>
+<p class="p2"><br></p>
+<p class="p1">1. First, briefly summarize the app architecture (1–2 short paragraphs).</p>
+<p class="p1">2. Then, provide a file-by-file breakdown in sections, like:</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">   </span>// File: BLEManager.swift</p>
+<p class="p1"><span class="Apple-converted-space">   </span>&lt;full code&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">   </span>// File: NutritionModels.swift</p>
+<p class="p1"><span class="Apple-converted-space">   </span>&lt;full code&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">   </span>// File: APIClient.swift</p>
+<p class="p1"><span class="Apple-converted-space">   </span>&lt;full code&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">   </span>// File: ImagePicker.swift</p>
+<p class="p1"><span class="Apple-converted-space">   </span>&lt;full code&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">   </span>// File: MealViewModel.swift</p>
+<p class="p1"><span class="Apple-converted-space">   </span>&lt;full code&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">   </span>// File: ContentView.swift</p>
+<p class="p1"><span class="Apple-converted-space">   </span>&lt;full code&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">   </span>// File: MainScaleView.swift</p>
+<p class="p1"><span class="Apple-converted-space">   </span>&lt;full code&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">   </span>// File: ResultView.swift</p>
+<p class="p1"><span class="Apple-converted-space">   </span>&lt;full code&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">   </span>// File: MealLogView.swift</p>
+<p class="p1"><span class="Apple-converted-space">   </span>&lt;full code&gt;</p>
+<p class="p2"><br></p>
+<p class="p1">3. Ensure the code snippets are complete and can be pasted into an Xcode project with minimal modification.</p>
+<p class="p1">4. Do NOT include unrelated commentary. Focus on concrete, working implementation.</p>
+<p class="p2"><br></p>
+<p class="p1">Now, based on everything above, design the iOS app and output the complete Swift code as described.</p>
+</body>
+</html>
