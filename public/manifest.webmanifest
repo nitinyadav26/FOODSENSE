@@ -1,0 +1,21 @@
+{
+  "name": "FoodSense",
+  "short_name": "FoodSense",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0d9488",
+  "description": "FoodSense is a smart-scale PWA that pairs live weight with AI nutrition analysis.",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
